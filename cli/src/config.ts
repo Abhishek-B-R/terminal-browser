@@ -14,6 +14,8 @@ import type { CommandId, LoadedConfig, SettingKey, Settings } from "shared";
 
 const SHORTCUT_PREFIX = "shortcuts.";
 const UNBOUND = "none";
+// a comma right after a modifier is the comma key, as in ctrl+, (but ctrl++,cmd+t is two chords)
+const CHORD_SEPARATOR = /(?<![^+]\+),/;
 
 type Target = { kind: "setting"; key: SettingKey } | { kind: "shortcut"; id: CommandId };
 
@@ -83,7 +85,7 @@ function set(store: ConfigStore, key: string, value: string): number {
     store.setShortcut(target.id, null);
     return 0;
   }
-  const chords = value.split(",").map((chord) => chord.trim()).filter(Boolean);
+  const chords = value.split(CHORD_SEPARATOR).map((chord) => chord.trim()).filter(Boolean);
   const invalid = chords.find((chord) => parseChord(chord) === null);
   if (invalid !== undefined || chords.length === 0) {
     return complain(`${invalid ?? value} is not a key chord. Example: cmd+shift+f, or ${UNBOUND} to unbind`);
