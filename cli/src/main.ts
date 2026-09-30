@@ -34,6 +34,7 @@ import { commandHelp, helpTopics, rootHelp } from "./help";
 import { browsers, describe, recordKey } from "./instances";
 import type { Browser } from "./instances";
 import { findHosts, openInHost } from "./interop";
+import { resolveLocalPath, resolveLocalPaths } from "./local-path";
 import { lsCommand } from "./ls";
 import { instances } from "./registry";
 import { apparmorSetup, deniedRefusal, linuxSandboxError, sandboxRefusal } from "./sandbox";
@@ -356,7 +357,7 @@ async function openHere(argv: string[]): Promise<never> {
   await sshSetup(argv).catch((error) =>
     fail(error instanceof Error ? error.message : String(error)),
   );
-  return attachHere(argv).catch((error) => fail(`could not start the browser: ${String(error)}`));
+  return attachHere(resolveLocalPaths(argv)).catch((error) => fail(`could not start the browser: ${String(error)}`));
 }
 
 function flagEq(argv: string[], flag: string): string | undefined {
@@ -451,7 +452,7 @@ async function newTabCommand(url: string | undefined, key: string | undefined): 
   }
   const target = here[0];
   if (target) {
-    const where = url ? { cmd: "open-tab", url, cwd: process.cwd() } : { cmd: "open-tab" };
+    const where = url ? { cmd: "open-tab", url: resolveLocalPath(url), cwd: process.cwd() } : { cmd: "open-tab" };
     print(await control(target.socket, where));
     return 0;
   }
@@ -460,7 +461,7 @@ async function newTabCommand(url: string | undefined, key: string | undefined): 
   const argv = url ? [url] : [];
   if (interactiveTty()) return openHere(argv);
   if (!canSplit(check.terminal)) fail(cannotOpenPanes(check.terminal));
-  const split = url && fs.existsSync(url) ? [path.resolve(url)] : argv;
+  const split = resolveLocalPaths(argv);
   split.push("--split-dir=right");
   const tty = ownTtyPath() ?? callerTty().path;
   if (tty) split.push(`--parent-tty=${tty}`);
@@ -550,7 +551,7 @@ async function tryAdopt(args: string[], direction: Direction | null): Promise<bo
     if (hosts.length === 0) return false;
   }
   const url = args.find((arg) => !arg.startsWith("-"));
-  const resolved = url && fs.existsSync(url) ? path.resolve(url) : url;
+  const resolved = url && resolveLocalPath(url);
   for (const host of hosts) {
     try {
       const opened = await openInHost(host.socket, { url: resolved });
@@ -589,7 +590,6 @@ async function openCommand(args: string[]) {
   const terminal = (await currentTerminal()).terminal;
   const direction = split ?? "right";
   if (!canSplit(terminal)) fail(cannotOpenPanes(terminal));
-  const url = args.find((arg) => !arg.startsWith("-"));
   const own = ownTtyPath();
   const caller = own ? null : callerTty();
   if (caller?.denied) {
@@ -597,7 +597,7 @@ async function openCommand(args: string[]) {
     if (refusal) fail(refusal);
   }
   const tty = own ?? caller?.path ?? null;
-  const argv = args.map((arg) => (arg === url && fs.existsSync(arg) ? path.resolve(arg) : arg));
+  const argv = resolveLocalPaths(args);
   argv.push(`--split-dir=${direction}`);
   if (tty) argv.push(`--parent-tty=${tty}`);
   print(await launchInSplit(terminal!, direction, argv, size));
